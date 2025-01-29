@@ -23,7 +23,8 @@ def chn(id: str) -> str:
 
 
 # URI to the Crazyflie to connect to
-ID = input('Enter CF ID (01 - 40):');
+# ID = input('Enter CF ID (01 - 40):');
+ID = '03'
 uri = 'radio://0/' + chn(ID) + '/2M/247E0000' + ID;
 print(uri);
 
@@ -45,11 +46,13 @@ def simple_log(scf, logconf):
             break
 ...
 
-def log_vbat(logger):
-    for log_entry in logger:
-        print('V_bat: ', round(log_entry[1]['pm.vbat'], 2), 'V');
-        break;
-    return 0;
+def log_vbat(scf):
+    with SyncLogger(scf, lg_bat) as logger:
+        for log_entry in logger:
+            vbat = log_entry[1]['pm.vbat'];
+            print('V_bat: ', round(vbat, 2), 'V');
+            break;
+    return vbat;
 
 if __name__ == '__main__':
     # Initialize the low-level drivers
@@ -60,16 +63,25 @@ if __name__ == '__main__':
 
 
     with SyncCrazyflie(uri, cf=Crazyflie(rw_cache='./cache')) as scf:
-        with SyncLogger(scf, lg_bat) as logger:
-            
-            log_vbat(logger);
-            time.sleep(1.0);
+        
+        
+        V1 = log_vbat(scf);
+        time.sleep(0.2);
 
-            commander = PositionHlCommander(scf);
-            commander.take_off(1.0, 1.0);
-            commander.go_to(0, 0, 1, 1.0);
+        commander = PositionHlCommander(scf);
+        commander.take_off(1.0, 1.0);
+        commander.go_to(0, 0, 1, 1.0);
 
-            time.sleep(2);
-            log_vbat(logger);
-            time.sleep(1.0);
-            commander.land();
+        time.sleep(2);
+        V2 = log_vbat(scf);
+        time.sleep(0.2);
+        commander.land();
+
+        DV = V1 - V2;
+        I_ss = DV / 2;
+        P_ss = I_ss * 4.2;
+        P = I_ss * V1;
+        print('Voltage drop:', round(DV, 2), 'V');
+        print('Resulting current:', round(I_ss, 2), 'A');
+        print('Power consumption (modelled):', round(P_ss, 2), 'W');
+        print('Power consumption (real):', round(P, 2), 'W');
