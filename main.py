@@ -2,7 +2,6 @@ import logging
 import time
 import os
 
-
 import cflib.crtp
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
@@ -33,15 +32,21 @@ def log_vbat(scf):
     with SyncLogger(scf, lg_bat) as logger:
         for log_entry in logger:
             vbat = log_entry[1]['pm.vbat'];
-            print('V_bat: ', round(vbat, 2), 'V');
+            #print('V_bat: ', round(vbat, 2), 'V');
             break;
     return vbat;
 
 
 
 
+R_int = 2.0; # Ohm
+max_takeoffs = 20;
+filename = 'Record.csv';
 
-# URI to the Crazyflie to connect to
+
+
+
+
 # ID = input('Enter CF ID (01 - 40):');
 ID = '03'
 uri = 'radio://0/' + chn(ID) + '/2M/247E0000' + ID;
@@ -62,37 +67,41 @@ if __name__ == '__main__':
 
 
     with SyncCrazyflie(uri, cf=Crazyflie(rw_cache='./cache')) as scf:
-        V1 = log_vbat(scf);
-        while V1 > 3.8:
-            # V1 = log_vbat(scf);
+        V2 = 3.8;
+        while V2 > 3.3 and count <= max_takeoffs:
+            V1 = log_vbat(scf);
 
-            time.sleep(0.4);
+            time.sleep(0.5);
             commander = PositionHlCommander(scf);
             commander.take_off(1.0, 1.0);
             commander.go_to(0, 0, 1, 1.0);
 
-            time.sleep(2);
+            time.sleep(2.2);
             V2 = log_vbat(scf);
-            time.sleep(0.4);
+
             commander.land();
+            time.sleep(2.5);
 
             dV = V1 - V2;
-            I_ss = dV / 2;
-            # P_ss = I_ss * 4.2;
-            # P = I_ss * V1;
-            # print('Voltage drop:', round(dV, 2), 'V');
-            # print('Resulting current:', round(I_ss, 2), 'A');
-            # print('Power consumption (modelled):', round(P_ss, 2), 'W');
-            # print('Power consumption (real):', round(P, 2), 'W');
+            I_ss = dV / R_int;
+            P = I_ss * dV;
+
+            print();
+            print('Takeoff', count, '/', max_takeoffs);
+            print('V1:', round(V1, 2));
+            print('V2:', round(V2, 2));
+            print('Voltage drop:', round(dV, 2), 'V');
+            print('Resulting current:', round(I_ss, 2), 'A');
+            print('Resulting power consumption:', round(P, 2), 'W');
 
 
-            if os.path.exists('Record.csv'):
-                df = pd.read_csv('Record.csv')
+            if os.path.exists(filename):
+                df = pd.read_csv(filename)
             else:
-                df = pd.DataFrame(columns=['V1', 'V2', 'dV', 'I_ss'])
+                df = pd.DataFrame(columns=['V1', 'V2', 'dV', 'I', 'P'])
 
-            df.loc[len(df)] = [V1, V2, dV, I_ss];
-            df.to_csv('Record.csv', index=False)
+            df.loc[len(df)] = [V1, V2, dV, I_ss, P];
+            df.to_csv(filename, index=False)
 
             count += 1;
 
